@@ -1,0 +1,2 @@
+This program detects your invalid or illegal moves in your chess games.
+in game.txt input, the form must be as follows: 1. e4 d5 2. exd5 Qxd5 3.Nc3 etc.
