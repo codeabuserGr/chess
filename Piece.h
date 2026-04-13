@@ -18,6 +18,7 @@ public:
     bool operator==(const Piece& p)const;
     virtual void update_legal_moves();
     virtual bool* get_legal_moves();
+    virtual void update_possible_moves();
     bool pinned=false;
     int pinning_piece_placement=-1;
     bool moved=false;
@@ -32,6 +33,7 @@ protected:
     bool color;
     bool controlled_squares[64];
     bool legal_moves[64];
+    bool possible_moves[64];
 };
 
 class King : public Piece {
@@ -43,6 +45,7 @@ public:
     bool* get_controlled_squares()override;
     void update_legal_moves()override;
     bool* get_legal_moves()override;
+    void update_possible_moves()override;
 };
 
 class Queen : public Piece {
@@ -54,6 +57,7 @@ public:
     bool* get_controlled_squares()override;
     void update_legal_moves()override;
     bool* get_legal_moves()override;
+    void update_possible_moves()override;
 };
 
 class Rook : public Piece {
@@ -65,6 +69,7 @@ public:
     bool* get_controlled_squares()override;
     void update_legal_moves()override;
     bool* get_legal_moves()override;
+    void update_possible_moves()override;
 };
 
 class Bishop : public Piece {
@@ -76,6 +81,7 @@ public:
     bool* get_controlled_squares()override;
     void update_legal_moves()override;
     bool* get_legal_moves()override;
+    void update_possible_moves()override;
 };
 
 class Knight : public Piece {
@@ -87,6 +93,7 @@ public:
     bool* get_controlled_squares()override;
     void update_legal_moves()override;
     bool* get_legal_moves()override;
+    void update_possible_moves()override;
 };
 
 class Pawn: public Piece {
@@ -98,14 +105,15 @@ public:
     bool* get_controlled_squares()override;
     void update_legal_moves()override;
     bool* get_legal_moves()override;
+    void update_possible_moves()override;
 
 };
-
-void move(int turn, char m, int x, int y);
-
-Piece* WhitePieces[16];
-Piece* BlackPieces[16];
-Piece* Board[64];
+void delete_piece(char x, int y);
+void move(int turn, char m, char x, int y, bool c,
+          char ambiguous_file, int ambiguous_rank, char n);
+inline Piece* WhitePieces[16];
+inline Piece* BlackPieces[16];
+inline Piece* Board[64];
 void detect_pins(King& K);
 void detect_checks(King& K);
 #endif //UNTITLED_PIECE_H

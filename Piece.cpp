@@ -31,12 +31,39 @@ int Piece::get_y(){return rank;}
 bool Piece::get_color() {return color;}
 Piece::~Piece(){}
 void Piece::move(char x, int y) {
-    file=x; rank=y;
+    int old_pos = convert(file, rank);
+    int new_pos = convert(x, y);
+
+    // αφαιρείται από παλιά θέση
+    Board[old_pos] = nullptr;
+
+    // τοποθετείται στη νέα
+    Board[new_pos] = this;
+
+    // update coords
+    file = x;
+    rank = y;
 }
 
 bool Piece::operator==(const Piece &p)const {
     return (p.color==color && p.file==file && p.rank==rank && p.type==type);
 }
+void Piece::update_controlled_squares() {}
+
+bool* Piece::get_controlled_squares() {
+    return controlled_squares;
+}
+
+void Piece::update_legal_moves() {}
+
+bool* Piece::get_legal_moves() {
+    return legal_moves;
+}
+
+char Piece::get_type() {
+    return type;
+}
+void Piece::update_possible_moves() {}
 
 King::King(bool c, char x, int y):Piece('K',c, x, y){}
 char King::get_type() {return type;}
@@ -80,6 +107,8 @@ void King::update_legal_moves() {
 
 }
 
+void King::update_possible_moves(){}
+King::~King()=default;
 
 Queen::Queen(bool c, char x, int y):Piece('Q',c, x, y){}
 char Queen::get_type() {return type;}
@@ -141,12 +170,14 @@ bool* Queen::get_legal_moves() {return legal_moves;}
 void Queen::update_legal_moves() {
     for (int i=0; i<64; i++)
         legal_moves[i]=false;
+    Piece** Pieces = color ? WhitePieces : BlackPieces;
+    if (Pieces[12]->checked && pinned)return;
     for (int i=0; i<64; i++) {
         if (!controlled_squares[i]) continue;
-        if (BlackPieces[12]->checked) {
-
-            int attacker = BlackPieces[12]->checking_piece_placement[0];
-            int king_sq = convert(BlackPieces[12]->get_x(), BlackPieces[12]->get_y());
+        if (Pieces[12]->checked) {
+            if (Pieces[12]->checking_piece_placement[1]!=-1)return;
+            int attacker = Pieces[12]->checking_piece_placement[0];
+            int king_sq = convert(Pieces[12]->get_x(), Pieces[12]->get_y());
 
             // capture
             if (i == attacker) {
@@ -163,13 +194,33 @@ void Queen::update_legal_moves() {
             legal_moves[i] = false;
             continue;
         }
+        if (pinned) {
+            int attacker = pinning_piece_placement;
+            int king_sq = convert(Pieces[12]->get_x(), Pieces[12]->get_y());
 
-    }
-    for (int i=0; i<64; i++) {
-        if (!controlled_squares[i] || Board[i]!=nullptr && Board[i]->get_color()==color)legal_moves[i]=false;
+            // capture
+            if (i == attacker) {
+                legal_moves[i] = true;
+                continue;
+            }
+
+            // block
+            if (is_between(king_sq, attacker, i)) {
+                legal_moves[i] = true;
+                continue;
+            }
+
+            legal_moves[i] = false;
+            continue;
+        }
+        if (!controlled_squares[i] || (Board[i] && Board[i]->get_color()==color))legal_moves[i]=false;
         else legal_moves[i]=true;
     }
 }
+
+void Queen::update_possible_moves() {}
+
+Queen::~Queen() {}
 
 Rook::Rook(bool c, char x, int y):Piece('R',c, x, y){}
 char Rook::get_type() {return type;}
@@ -204,11 +255,59 @@ void Rook::update_controlled_squares() {
 }
 bool* Rook::get_legal_moves() {return legal_moves;}
 void Rook::update_legal_moves() {
+    for (int i=0; i<64; i++)
+        legal_moves[i]=false;
+    Piece** Pieces = color ? WhitePieces : BlackPieces;
+    if (Pieces[12]->checked && pinned)return;
     for (int i=0; i<64; i++) {
-        if (!controlled_squares[i] || Board[i]!=nullptr && Board[i]->get_color()==color)legal_moves[i]=false;
+        if (!controlled_squares[i]) continue;
+        if (Pieces[12]->checked) {
+            if (Pieces[12]->checking_piece_placement[1]!=-1)return;
+            int attacker = Pieces[12]->checking_piece_placement[0];
+            int king_sq = convert(Pieces[12]->get_x(), Pieces[12]->get_y());
+
+            // capture
+            if (i == attacker) {
+                legal_moves[i] = true;
+                continue;
+            }
+
+            // block
+            if (is_between(king_sq, attacker, i)) {
+                legal_moves[i] = true;
+                continue;
+            }
+
+            legal_moves[i] = false;
+            continue;
+        }
+        if (pinned) {
+            int attacker = pinning_piece_placement;
+            int king_sq = convert(Pieces[12]->get_x(), Pieces[12]->get_y());
+
+            // capture
+            if (i == attacker) {
+                legal_moves[i] = true;
+                continue;
+            }
+
+            // block
+            if (is_between(king_sq, attacker, i)) {
+                legal_moves[i] = true;
+                continue;
+            }
+
+            legal_moves[i] = false;
+            continue;
+        }
+        if (!controlled_squares[i] || (Board[i] && Board[i]->get_color()==color))legal_moves[i]=false;
         else legal_moves[i]=true;
     }
 }
+
+void Rook::update_possible_moves() {}
+
+Rook::~Rook() {}
 
 
 Bishop::Bishop(bool c, char x, int y):Piece('B',c, x, y){}
@@ -242,7 +341,58 @@ void Bishop::update_controlled_squares() {
     }
 }
 bool* Bishop::get_legal_moves() {return legal_moves;}
+void Bishop::update_legal_moves() {
+    for (int i=0; i<64; i++)
+        legal_moves[i]=false;
+    Piece** Pieces = color ? WhitePieces : BlackPieces;
+    if (Pieces[12]->checked && pinned)return;
+    for (int i=0; i<64; i++) {
+        if (!controlled_squares[i]) continue;
+        if (Pieces[12]->checked) {
+            if (Pieces[12]->checking_piece_placement[1]!=-1)return;
+            int attacker = Pieces[12]->checking_piece_placement[0];
+            int king_sq = convert(Pieces[12]->get_x(), Pieces[12]->get_y());
 
+            // capture
+            if (i == attacker) {
+                legal_moves[i] = true;
+                continue;
+            }
+
+            // block
+            if (is_between(king_sq, attacker, i)) {
+                legal_moves[i] = true;
+                continue;
+            }
+
+            legal_moves[i] = false;
+            continue;
+        }
+        if (pinned) {
+            int attacker = pinning_piece_placement;
+            int king_sq = convert(Pieces[12]->get_x(), Pieces[12]->get_y());
+
+            // capture
+            if (i == attacker) {
+                legal_moves[i] = true;
+                continue;
+            }
+
+            // block
+            if (is_between(king_sq, attacker, i)) {
+                legal_moves[i] = true;
+                continue;
+            }
+
+            legal_moves[i] = false;
+            continue;
+        }
+        if (!controlled_squares[i] || (Board[i] && Board[i]->get_color()==color))legal_moves[i]=false;
+        else legal_moves[i]=true;
+    }
+}
+void Bishop::update_possible_moves() {}
+Bishop::~Bishop() {}
 
 Knight::Knight(bool c, char x, int y):Piece('N',c, x, y){}
 char Knight::get_type() {return type;}
@@ -259,6 +409,42 @@ void Knight::update_controlled_squares() {
     if (rank-1>=1 && file+2<='h')controlled_squares[convert(file+2,rank-1)]=true;
 }
 bool* Knight::get_legal_moves() {return legal_moves;}
+void Knight::update_legal_moves() {
+    for (int i=0; i<64; i++)
+        legal_moves[i]=false;
+    Piece** Pieces = color ? WhitePieces : BlackPieces;
+    if (pinned)return;
+    for (int i=0; i<64; i++) {
+        if (!controlled_squares[i]) continue;
+        if (Pieces[12]->checked) {
+            if (Pieces[12]->checking_piece_placement[1]!=-1)return;
+            int attacker = Pieces[12]->checking_piece_placement[0];
+            int king_sq = convert(Pieces[12]->get_x(), Pieces[12]->get_y());
+
+            // capture
+            if (i == attacker) {
+                legal_moves[i] = true;
+                continue;
+            }
+
+            // block
+            if (is_between(king_sq, attacker, i)) {
+                legal_moves[i] = true;
+                continue;
+            }
+
+            legal_moves[i] = false;
+            continue;
+        }
+
+        if (!controlled_squares[i] || (Board[i] && Board[i]->get_color()==color))legal_moves[i]=false;
+        else legal_moves[i]=true;
+    }
+}
+
+void Knight::update_possible_moves() {}
+
+Knight::~Knight(){}
 
 Pawn::Pawn(bool c, char x, int y):Piece('\0',c, x, y){}
 char Pawn::get_type() {return type;}
@@ -266,17 +452,111 @@ bool* Pawn::get_controlled_squares() {return controlled_squares;}
 void Pawn::update_controlled_squares() {
     for (int i=0; i<64; i++) controlled_squares[i]=false;
     if (color){
-        controlled_squares[convert(file-1,rank+1)]=true;
-        controlled_squares[convert(file+1,rank+1)]=true;
+        if (file-1>='a') {
+            int a=convert(file-1, rank+1);
+            controlled_squares[a]=true;
+        }
+        if (file+1<='h') {
+            int a=convert(file+1, rank+1);
+            controlled_squares[a]=true;
+        }
     }
     else {
-        controlled_squares[convert(file-1,rank-1)]=true;
-        controlled_squares[convert(file+1,rank-1)]=true;
+        if (file-1>='a') {
+            int a=convert(file-1, rank-1);
+            controlled_squares[a]=true;
+        }
+        if (file+1<='h') {
+            int a=convert(file+1, rank-1);
+            controlled_squares[a]=true;
+        }
+    }
+}
+void Pawn::update_possible_moves() {
+    for (int i=0; i<64; i++) possible_moves[i]=false;
+    int b=convert(file, rank);
+    if (color) {
+        if (b+16<64 && !Board[b+16] && get_y()==2)possible_moves[b+16]=true;
+        if (!Board[b+8])possible_moves[b+8]=true;
+        if (file-1>='a') {
+            int a=convert(file-1, rank+1);
+            if (Board[a] || (!Board[a] && file!='a' && Board[b-1] && Board[b-1]->get_type()=='\0' && Board[b-1]->just_moved2))possible_moves[a]=true;
+        }
+        if (file+1<='h'){
+            int a=convert(file+1, rank+1);
+            if (Board[a] || (!Board[a] && file!='h' && Board[b+1] && Board[b+1]->get_type()=='\0' && Board[b+1]->just_moved2))possible_moves[a]=true;
+        }
+    }
+    else {
+        if (b>=16 && !Board[b-16] && get_y()==7)possible_moves[b-16]=true;
+        if (!Board[b-8])possible_moves[b-8]=true;
+        if (file-1>='a') {
+            int a=convert(file-1, rank-1);
+            if (Board[a] || (!Board[a] && file !='a' && Board[b-1] && Board[b-1]->get_type()=='\0' && Board[b-1]->just_moved2))possible_moves[a]=true;
+        }
+        if (file+1<='h') {
+            int a=convert(file+1, rank-1);
+            if (Board[a] || (!Board[a] && file!='h' && Board[b+1] && Board[b+1]->get_type()=='\0' && Board[b+1]->just_moved2))possible_moves[a]=true;
+        }
     }
 }
 bool* Pawn::get_legal_moves() {return legal_moves;}
+void Pawn::update_legal_moves() {
+    for (int i=0; i<64; i++) {
+        legal_moves[i]=false;
+    }
+    Piece** Pieces = color ? WhitePieces : BlackPieces;
+    if (Pieces[12]->checked && pinned)return;
+
+    for (int i=0; i<64; i++) {
+        if (!possible_moves[i]) continue;
+        if (Pieces[12]->checked) {
+            if (Pieces[12]->checking_piece_placement[1]!=-1)return;
+            int attacker = Pieces[12]->checking_piece_placement[0];
+            int king_sq = convert(Pieces[12]->get_x(), Pieces[12]->get_y());
+
+            // capture
+            if (i == attacker) {
+                legal_moves[i] = true;
+                continue;
+            }
+
+            // block
+            if (is_between(king_sq, attacker, i)) {
+                legal_moves[i] = true;
+                continue;
+            }
+
+            legal_moves[i] = false;
+            continue;
+        }
+        if (pinned) {
+            int attacker = pinning_piece_placement;
+            int king_sq = convert(Pieces[12]->get_x(), Pieces[12]->get_y());
+
+            // capture
+            if (i == attacker) {
+                legal_moves[i] = true;
+                continue;
+            }
+
+            // block
+            if (is_between(king_sq, attacker, i)) {
+                legal_moves[i] = true;
+                continue;
+            }
+
+            legal_moves[i] = false;
+            continue;
+        }
+        if (!possible_moves[i] || (Board[i] && Board[i]->get_color()==color))legal_moves[i]=false;
+        else legal_moves[i]=true;
+    }
+}
 
 
+
+Pawn::~Pawn(){}
 
 void detect_pins(King& K) {
     for (int i=0; i<16; i++) {
@@ -424,6 +704,8 @@ void detect_pins(King& K) {
 }
 void detect_checks(King& K) {
     K.checked = false;
+    K.checking_piece_placement[0]=-1;
+    K.checking_piece_placement[1]=-1;
     int j = 0;
 
     int king_pos = convert(K.get_x(), K.get_y());
@@ -451,174 +733,236 @@ void detect_checks(King& K) {
         }
     }
 }
+void delete_piece(char x, int y) {
+    int a = convert(x, y);
 
-void move(int turn, char m, char x, int y, bool c,
-          char ambiguous_file, int ambiguous_rank) {
+    if (!Board[a]) return;
 
-    int target = convert(x,y);
-    bool moved = false;
+    Piece* victim = Board[a];
+    bool c = victim->get_color();
+    Piece** Pieces = c ? WhitePieces : BlackPieces;
 
-    Piece** pieces = c ? WhitePieces : BlackPieces;
-    Piece** enemy  = c ? BlackPieces : WhitePieces;
-
-    // ================= NORMAL MOVE =================
     for (int i=0; i<16; i++) {
-        if (!pieces[i]) continue;
-
-        if (!pieces[i]->get_legal_moves()[target]) continue;
-
-        // ambiguity handling
-        if (ambiguous_file!='\0' && ambiguous_rank!=0) {
-            if (pieces[i]->get_x()!=ambiguous_file ||
-                pieces[i]->get_y()!=ambiguous_rank) continue;
-        }
-        else if (ambiguous_file!='\0') {
-            if (pieces[i]->get_x()!=ambiguous_file) continue;
-        }
-        else if (ambiguous_rank!=0) {
-            if (pieces[i]->get_y()!=ambiguous_rank) continue;
-        }
-
-        pieces[i]->move(x,y);
-        moved = true;
-        break;
-    }
-
-    // ================= SPECIAL MOVES =================
-    if (moved) return;
-
-    // ================= CASTLING =================
-    King* king = nullptr;
-    Rook* rook = nullptr;
-
-    // βρίσκουμε king
-    for (int i=0; i<16; i++) {
-        if (pieces[i] && pieces[i]->get_type()=='K') {
-            king = static_cast<King*>(pieces[i]);
+        if (Pieces[i] == victim) {
+            Pieces[i] = nullptr;   // ❗ πρώτα null
+            delete victim;         // μετά delete
             break;
         }
     }
 
-    if (!king) return;
-
-    int ky = king->get_y();
-
-    // ---------- KING SIDE ----------
-    if (m=='K' && x=='g') {
-
-        int rook_pos = convert('h', ky);
-        if (Board[rook_pos] && Board[rook_pos]->get_type()=='R') {
-
-            rook = static_cast<Rook*>(Board[rook_pos]);
-
-            if (!rook->moved && !king->moved && !king->checked &&
-                Board[convert('f',ky)]==nullptr &&
-                Board[convert('g',ky)]==nullptr) {
-
-                bool ok = true;
-
-                int squares[] = {convert('f',ky), convert('g',ky)};
-
-                for (int s : squares) {
-                    for (int j=0; j<16; j++) {
-                        if (enemy[j] &&
-                            enemy[j]->get_controlled_squares()[s]) {
-                            ok = false;
-                            break;
-                        }
-                    }
-                    if (!ok) break;
-                }
-
-                if (ok) {
-                    king->move('g',ky);
-                    rook->move('f',ky);
-                    return;
-                }
-            }
-        }
-    }
-
-    // ---------- QUEEN SIDE ----------
-    if (m=='K' && x=='c') {
-
-        int rook_pos = convert('a', ky);
-        if (Board[rook_pos] && Board[rook_pos]->get_type()=='R') {
-
-            rook = static_cast<Rook*>(Board[rook_pos]);
-
-            if (!rook->moved && !king->moved && !king->checked &&
-                Board[convert('b',ky)]==nullptr &&
-                Board[convert('c',ky)]==nullptr &&
-                Board[convert('d',ky)]==nullptr) {
-
-                bool ok = true;
-
-                int squares[] = {convert('c',ky), convert('d',ky)};
-
-                for (int s : squares) {
-                    for (int j=0; j<16; j++) {
-                        if (enemy[j] &&
-                            enemy[j]->get_controlled_squares()[s]) {
-                            ok = false;
-                            break;
-                        }
-                    }
-                    if (!ok) break;
-                }
-
-                if (ok) {
-                    king->move('c',ky);
-                    rook->move('d',ky);
-                    return;
-                }
-            }
-        }
-    }
-
-    // ================= EN PASSANT =================
-    if (m=='\0') {
-
-        int pawn_rank = c ? 5 : 4;     // θέση pawn
-        int target_rank = c ? 6 : 3;   // destination
-
-        if (y == target_rank) {
-
-            for (int i=0; i<8; i++) {
-                if (!enemy[i]) continue;
-
-                if (enemy[i]->get_type()!='\0') continue;
-
-                if (!enemy[i]->just_moved2) continue;
-
-                if (enemy[i]->get_x() != x) continue;
-
-                // check adjacent pawn
-                int left  = x-1;
-                int right = x+1;
-
-                if (left >= 'a') {
-                    int pos = convert(left, pawn_rank);
-                    if (Board[pos] && Board[pos]->get_type()=='\0') {
-                        Board[pos]->move(x,y);
-
-                        // remove captured pawn
-                        Board[convert(x,pawn_rank)] = nullptr;
-                        return;
-                    }
-                }
-
-                if (right <= 'h') {
-                    int pos = convert(right, pawn_rank);
-                    if (Board[pos] && Board[pos]->get_type()=='\0') {
-                        Board[pos]->move(x,y);
-
-                        Board[convert(x,pawn_rank)] = nullptr;
-                        return;
-                    }
-                }
-            }
-        }
-    }
+    Board[a] = nullptr;
 }
+
+void move(int turn, char m, char x, int y, bool c, char ambiguous_file, int ambiguous_rank, char n) {
+        int target = convert(x,y);
+        if (target < 0 || target >= 64)
+            throw std::out_of_range("Invalid square");
+
+        Piece** pieces = c ? WhitePieces : BlackPieces;
+        Piece** enemy  = c ? BlackPieces : WhitePieces;
+
+        bool moved = false;
+        int moved_index = -1;
+
+        // ================= NORMAL MOVE =================
+        for (int i=0; i<16; i++) {
+            if (!pieces[i]) continue;
+
+            // τύπος κομματιού (important fix)
+            if (m!='\0' && pieces[i]->get_type()!=m) continue;
+
+            bool* lm = pieces[i]->get_legal_moves();
+            if (!lm || !lm[target]) continue;
+
+            // ambiguity
+            if (ambiguous_file!='\0' && ambiguous_rank!=0) {
+                if (pieces[i]->get_x()!=ambiguous_file ||
+                    pieces[i]->get_y()!=ambiguous_rank) continue;
+            }
+            else if (ambiguous_file!='\0') {
+                if (pieces[i]->get_x()!=ambiguous_file) continue;
+            }
+            else if (ambiguous_rank!=0) {
+                if (pieces[i]->get_y()!=ambiguous_rank) continue;
+            }
+
+            int old_file = pieces[i]->get_x();
+            int old_rank = pieces[i]->get_y();
+            // ================= EN PASSANT =================
+            if (pieces[i]->get_type()=='\0') { // pawn
+                // διαγώνια κίνηση σε άδειο τετράγωνο
+                if (Board[target] == nullptr && old_file != x) {
+                    int dir = pieces[i]->get_color() ? -1 : 1;
+
+                    int captured_rank = y + dir;
+                    int captured_pos = convert(x, captured_rank);
+
+                    if (captured_pos >= 0 && captured_pos < 64 &&
+                        Board[captured_pos] &&
+                        Board[captured_pos]->get_type()=='\0' &&
+                        Board[captured_pos]->get_color() != c &&
+                        Board[captured_pos]->just_moved2) {
+
+                        // delete enemy pawn
+                        delete_piece(x, captured_rank);
+                        }
+                }
+            }
+
+            // capture
+            if (Board[target] != nullptr) {
+                delete_piece(x, y);
+            }
+
+            pieces[i]->move(x,y);
+            cout << turn << " " <<pieces[i]->get_type() << x << y << endl;
+            pieces[i]->moved = true;
+
+            // reset enemy pawn flags
+            for (int k=0; k<16; k++) {
+                if (enemy[k]!=nullptr && enemy[k]->get_type()=='\0') {
+                    enemy[k]->just_moved2 = false;
+                }
+            }
+
+            // pawn double move
+            if (pieces[i]->get_type()=='\0') {
+                if (abs(y - old_rank) == 2)
+                    pieces[i]->just_moved2 = true;
+                else
+                    pieces[i]->just_moved2 = false;
+            }
+
+            moved = true;
+            moved_index = i;
+            break;
+        }
+
+        // ================= PROMOTION =================
+        if (moved) {
+            Piece* p = pieces[moved_index];
+
+            if (p && p->get_type()=='\0') {
+                if ((p->get_color() && y==8) ||
+                    (!p->get_color() && y==1)) {
+
+                    int pos = convert(x,y);
+                    delete pieces[moved_index];
+                    pieces[moved_index] = nullptr;
+
+                    Piece* newPiece = nullptr;
+
+                    switch(n) {
+                        case 'Q': newPiece = new Queen(c, x, y); break;
+                        case 'R': newPiece = new Rook(c, x, y); break;
+                        case 'B': newPiece = new Bishop(c, x, y); break;
+                        case 'N': newPiece = new Knight(c, x, y); break;
+                        default: newPiece = new Queen(c, x, y);
+                    }
+
+                    pieces[moved_index] = newPiece;
+                    Board[pos] = newPiece;
+                    }
+            }
+
+            return;
+        }
+
+        // ================= CASTLING =================
+        King* king = nullptr;
+
+        for (int i=0; i<16; i++) {
+            if (pieces[i] && pieces[i]->get_type()=='K') {
+                king = static_cast<King*>(pieces[i]);
+                break;
+            }
+        }
+
+        int ky = king->get_y();
+
+        // ---------- KING SIDE ----------
+        if (m=='C' && x=='g') {
+            int rook_pos = convert('h', ky);
+
+            if (Board[rook_pos] && Board[rook_pos]->get_type()=='R') {
+
+                Rook* rook = static_cast<Rook*>(Board[rook_pos]);
+
+                if (!rook->moved && !king->moved && !king->checked &&
+                    Board[convert('f',ky)]==nullptr &&
+                    Board[convert('g',ky)]==nullptr) {
+                    bool ok = true;
+
+                    int squares[] = {convert('f',ky), convert('g',ky)};
+
+                    for (int s : squares) {
+                        for (int j=0; j<16; j++) {
+                            if (enemy[j]) {
+                                bool* cs = enemy[j]->get_controlled_squares();
+                                if (cs && cs[s]) {
+                                    ok = false;
+                                    break;
+                                }
+                            }
+                        }
+                        if (!ok) {break;}
+                    }
+
+                    if (ok) {
+                        cout << "LO" << endl;
+                        king->move('g',ky);
+                        rook->move('f',ky);
+                        return;
+                    }
+                    }
+
+            }
+        }
+
+        // ---------- QUEEN SIDE ----------
+        if (m=='C' && x=='c') {
+
+            int rook_pos = convert('a', ky);
+
+            if (Board[rook_pos] && Board[rook_pos]->get_type()=='R') {
+
+                Rook* rook = static_cast<Rook*>(Board[rook_pos]);
+
+                if (!rook->moved && !king->moved && !king->checked &&
+                    Board[convert('b',ky)]==nullptr &&
+                    Board[convert('c',ky)]==nullptr &&
+                    Board[convert('d',ky)]==nullptr) {
+
+                    bool ok = true;
+
+                    int squares[] = {convert('c',ky), convert('d',ky)};
+
+                    for (int s : squares) {
+                        for (int j=0; j<16; j++) {
+                            if (enemy[j]!=nullptr) {
+                                bool* cs = enemy[j]->get_controlled_squares();
+                                if (cs && cs[s]) {
+                                    ok = false;
+                                    break;
+                                }
+                            }
+                        }
+                        if (!ok) break;
+                    }
+
+                    if (ok) {
+                        cout << "LO LO" <<endl;
+                        king->move('c',ky);
+                        rook->move('d',ky);
+                        return;
+                    }
+                    }
+            }
+        }
+
+        // ================= INVALID =================
+        cout << "On move " << turn << " ";
+        throw std::runtime_error("invalid move!");
+    }
+
 

@@ -8,4 +8,6 @@ add_executable(untitled main.cpp
         Piece.cpp
         Chessboard_setup.h
         Chessboard_setup.cpp
+        update_state.h
+        update_state.cpp
 )
