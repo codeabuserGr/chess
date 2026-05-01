@@ -7,22 +7,37 @@ int convert(char x, int y) {
 }
 
 bool is_between(int king, int attacker, int sq) {
+    if (sq == king || sq == attacker) return false;
 
     int kf = king % 8, kr = king / 8;
     int af = attacker % 8, ar = attacker / 8;
     int sf = sq % 8, sr = sq / 8;
 
-    // πρέπει να είναι στην ίδια γραμμή
-    if (!( (kf==af) || (kr==ar) ||
-           (abs(kf-af)==abs(kr-ar)) )) return false;
+    int df = af - kf;
+    int dr = ar - kr;
 
-    // sq πρέπει να είναι στην ίδια γραμμή επίσης
-    if (!( (kf==sf) || (kr==sr) ||
-           (abs(kf-sf)==abs(kr-sr)) )) return false;
+    // king και attacker πρέπει να είναι ίδια γραμμή, στήλη ή διαγώνιος
+    if (!(df == 0 || dr == 0 || abs(df) == abs(dr))) {
+        return false;
+    }
 
-    // και ανάμεσα
-    return ( (sf >= min(kf,af) && sf <= max(kf,af)) &&
-             (sr >= min(kr,ar) && sr <= max(kr,ar)) );
+    int stepF = (df > 0) - (df < 0);
+    int stepR = (dr > 0) - (dr < 0);
+
+    int f = kf + stepF;
+    int r = kr + stepR;
+
+    // προχωράμε ακριβώς πάνω στη γραμμή king -> attacker
+    while (f != af || r != ar) {
+        if (f == sf && r == sr) {
+            return true;
+        }
+
+        f += stepF;
+        r += stepR;
+    }
+
+    return false;
 }
 
 Piece::Piece(char m, bool c, char x, int y):color(c), type(m), file(x), rank(y), controlled_squares{}, legal_moves{} {}
@@ -84,7 +99,7 @@ void King::update_controlled_squares() {
 bool* King::get_legal_moves() {return legal_moves;}
 void King::update_legal_moves() {
     for (int i=0; i<64; i++) {
-        if (!controlled_squares[i]){legal_moves[i]=false; continue;}
+        if (!controlled_squares[i]||(Board[i] && Board[i]->get_color()==color)){legal_moves[i]=false; continue;}
         if (Board[i]!=nullptr && Board[i]->get_color()==color){legal_moves[i]=false; continue;}
         if (color==0) {
             bool f=false;
@@ -115,65 +130,65 @@ char Queen::get_type() {return type;}
 bool* Queen::get_controlled_squares() {return controlled_squares;}
 
 void Queen::update_controlled_squares(){
+    Piece** Pieces = color ? BlackPieces : WhitePieces;
     for (int i=0; i<64; i++) controlled_squares[i]=false;
     for (int i=1; i<=7; i++) {
         if (rank+i>8 || file-i<'a')break;
         int a=convert(file-i, rank+i);
         controlled_squares[a]=true;
-        if (Board[a]!=nullptr)break;
+        if (Board[a]!=nullptr && Board[a]!=Pieces[12])break;
     }
     for (int i=1; i<=7; i++) {
         if (rank+i>8)break;
         int a=convert(file, rank+i);
         controlled_squares[a]=true;
-        if (Board[a]!=nullptr)break;
+        if (Board[a]!=nullptr && Board[a]!=Pieces[12])break;
     }
     for (int i=1; i<=7; i++) {
         if (rank+i>8 || file+i>'h')break;
         int a=convert(file+i, rank+i);
         controlled_squares[a]=true;
-        if (Board[a]!=nullptr)break;
+        if (Board[a]!=nullptr && Board[a]!=Pieces[12])break;
     }
     for (int i=1; i<=7; i++) {
         if (file-i<'a')break;
         int a=convert(file-i, rank);
         controlled_squares[a]=true;
-        if (Board[a]!=nullptr)break;
+        if (Board[a]!=nullptr && Board[a]!=Pieces[12])break;
     }
     for (int i=1; i<=7; i++) {
         if (file+i>'h')break;
         int a=convert(file+i, rank);
         controlled_squares[a]=true;
-        if (Board[a]!=nullptr)break;
+        if (Board[a]!=nullptr && Board[a]!=Pieces[12])break;
     }
     for (int i=1; i<=7; i++) {
         if (rank-i<1 || file-i<'a')break;
         int a=convert(file-i, rank-i);
         controlled_squares[a]=true;
-        if (Board[a]!=nullptr)break;
+        if (Board[a]!=nullptr && Board[a]!=Pieces[12])break;
     }
     for (int i=1; i<=7; i++) {
         if (rank-i<1)break;
         int a=convert(file, rank-i);
         controlled_squares[a]=true;
-        if (Board[a]!=nullptr)break;
+        if (Board[a]!=nullptr && Board[a]!=Pieces[12])break;
     }
     for (int i=1; i<=7; i++) {
         if (rank-i<1 || file+i>'h')break;
         int a=convert(file+i, rank-i);
         controlled_squares[a]=true;
-        if (Board[a]!=nullptr)break;
+        if (Board[a]!=nullptr && Board[a]!=Pieces[12])break;
     }
 }
 bool* Queen::get_legal_moves() {return legal_moves;}
 
 void Queen::update_legal_moves() {
-    for (int i=0; i<64; i++)
-        legal_moves[i]=false;
+    for (int i=0; i<64; i++) {legal_moves[i]=false;}
     Piece** Pieces = color ? WhitePieces : BlackPieces;
     if (Pieces[12]->checked && pinned)return;
     for (int i=0; i<64; i++) {
-        if (!controlled_squares[i]) continue;
+        if (!controlled_squares[i]|| (Board[i] && Board[i]->get_color()==color)){legal_moves[i]=false; continue;}
         if (Pieces[12]->checked) {
             if (Pieces[12]->checking_piece_placement[1]!=-1)return;
             int attacker = Pieces[12]->checking_piece_placement[0];
@@ -227,40 +242,40 @@ char Rook::get_type() {return type;}
 bool* Rook::get_controlled_squares() {return controlled_squares;}
 
 void Rook::update_controlled_squares() {
+    Piece** Pieces = color ? BlackPieces : WhitePieces;
     for (int i=0; i<64; i++) controlled_squares[i]=false;
     for (int i=1; i<=7; i++) {
         if (rank+i>8)break;
         int a=convert(file, rank+i);
         controlled_squares[a]=true;
-        if (Board[a]!=nullptr)break;
+        if (Board[a]!=nullptr && Board[a]!=Pieces[12])break;
     }
     for (int i=1; i<=7; i++) {
         if (file-i<'a')break;
         int a=convert(file-i, rank);
         controlled_squares[a]=true;
-        if (Board[a]!=nullptr)break;
+        if (Board[a]!=nullptr && Board[a]!=Pieces[12])break;
     }
     for (int i=1; i<=7; i++) {
         if (file+i>'h')break;
         int a=convert(file+i, rank);
         controlled_squares[a]=true;
-        if (Board[a]!=nullptr)break;
+        if (Board[a]!=nullptr && Board[a]!=Pieces[12])break;
     }
     for (int i=1; i<=7; i++) {
         if (rank-i<1)break;
         int a=convert(file, rank-i);
         controlled_squares[a]=true;
-        if (Board[a]!=nullptr)break;
+        if (Board[a]!=nullptr && Board[a]!=Pieces[12])break;
     }
 }
 bool* Rook::get_legal_moves() {return legal_moves;}
 void Rook::update_legal_moves() {
-    for (int i=0; i<64; i++)
-        legal_moves[i]=false;
+    for (int i=0; i<64; i++) {legal_moves[i]=false;}
     Piece** Pieces = color ? WhitePieces : BlackPieces;
     if (Pieces[12]->checked && pinned)return;
     for (int i=0; i<64; i++) {
-        if (!controlled_squares[i]) continue;
+        if (!controlled_squares[i]|| (Board[i] && Board[i]->get_color()==color)){legal_moves[i]=false; continue;}
         if (Pieces[12]->checked) {
             if (Pieces[12]->checking_piece_placement[1]!=-1)return;
             int attacker = Pieces[12]->checking_piece_placement[0];
@@ -314,40 +329,40 @@ Bishop::Bishop(bool c, char x, int y):Piece('B',c, x, y){}
 char Bishop::get_type() {return type;}
 bool* Bishop::get_controlled_squares(){return controlled_squares;}
 void Bishop::update_controlled_squares() {
+    Piece** Pieces = color ? BlackPieces : WhitePieces;
     for (int i=0; i<64; i++) controlled_squares[i]=false;
     for (int i=1; i<=7; i++) {
         if (rank+i>8 || file-i<'a')break;
         int a=convert(file-i, rank+i);
         controlled_squares[a]=true;
-        if (Board[a]!=nullptr)break;
+        if (Board[a]!=nullptr && Board[a]!=Pieces[12])break;
     }
     for (int i=1; i<=7; i++) {
         if (rank+i>8 || file+i>'h')break;
         int a=convert(file+i, rank+i);
         controlled_squares[a]=true;
-        if (Board[a]!=nullptr)break;
+        if (Board[a]!=nullptr && Board[a]!=Pieces[12])break;
     }
     for (int i=1; i<=7; i++) {
         if (rank-i<1 || file-i<'a')break;
         int a=convert(file-i, rank-i);
         controlled_squares[a]=true;
-        if (Board[a]!=nullptr)break;
+        if (Board[a]!=nullptr && Board[a]!=Pieces[12])break;
     }
     for (int i=1; i<=7; i++) {
         if (rank-i<1 || file+i>'h')break;
         int a=convert(file+i, rank-i);
         controlled_squares[a]=true;
-        if (Board[a]!=nullptr)break;
+        if (Board[a]!=nullptr && Board[a]!=Pieces[12])break;
     }
 }
 bool* Bishop::get_legal_moves() {return legal_moves;}
 void Bishop::update_legal_moves() {
-    for (int i=0; i<64; i++)
-        legal_moves[i]=false;
+    for (int i=0; i<64; i++) {legal_moves[i]=false;}
     Piece** Pieces = color ? WhitePieces : BlackPieces;
     if (Pieces[12]->checked && pinned)return;
     for (int i=0; i<64; i++) {
-        if (!controlled_squares[i]) continue;
+        if (!controlled_squares[i]|| (Board[i] && Board[i]->get_color()==color)){legal_moves[i]=false; continue;}
         if (Pieces[12]->checked) {
             if (Pieces[12]->checking_piece_placement[1]!=-1)return;
             int attacker = Pieces[12]->checking_piece_placement[0];
@@ -410,12 +425,11 @@ void Knight::update_controlled_squares() {
 }
 bool* Knight::get_legal_moves() {return legal_moves;}
 void Knight::update_legal_moves() {
-    for (int i=0; i<64; i++)
-        legal_moves[i]=false;
+    for (int i=0; i<64; i++) {legal_moves[i]=false;}
     Piece** Pieces = color ? WhitePieces : BlackPieces;
-    if (pinned)return;
+    if (pinned){ return;}
     for (int i=0; i<64; i++) {
-        if (!controlled_squares[i]) continue;
+        if (!controlled_squares[i] || (Board[i] && Board[i]->get_color()==color)){legal_moves[i]=false; continue;}
         if (Pieces[12]->checked) {
             if (Pieces[12]->checking_piece_placement[1]!=-1)return;
             int attacker = Pieces[12]->checking_piece_placement[0];
@@ -476,7 +490,7 @@ void Pawn::update_possible_moves() {
     for (int i=0; i<64; i++) possible_moves[i]=false;
     int b=convert(file, rank);
     if (color) {
-        if (b+16<64 && !Board[b+16] && get_y()==2)possible_moves[b+16]=true;
+        if (b+16<64 && !Board[b+16] && !Board[b+8] && get_y()==2)possible_moves[b+16]=true;
         if (!Board[b+8])possible_moves[b+8]=true;
         if (file-1>='a') {
             int a=convert(file-1, rank+1);
@@ -488,7 +502,7 @@ void Pawn::update_possible_moves() {
         }
     }
     else {
-        if (b>=16 && !Board[b-16] && get_y()==7)possible_moves[b-16]=true;
+        if (b>=16 && !Board[b-16] && !Board[b-8] && get_y()==7)possible_moves[b-16]=true;
         if (!Board[b-8])possible_moves[b-8]=true;
         if (file-1>='a') {
             int a=convert(file-1, rank-1);
@@ -559,146 +573,74 @@ void Pawn::update_legal_moves() {
 Pawn::~Pawn(){}
 
 void detect_pins(King& K) {
-    for (int i=0; i<16; i++) {
-        if (WhitePieces[i]!=nullptr && K.get_color())WhitePieces[i]->pinned=false;
-        if (BlackPieces[i]!=nullptr && !K.get_color())BlackPieces[i]->pinned=false;
-    }
-    bool b=false;
-    int c;
-    for (int i=1; i<=7; i++) {
-        if (K.get_y()+i>8 || K.get_x()-i<'a') break;
-        int a = convert(K.get_x()-i, K.get_y()+i);
-        if (Board[a]!=nullptr) {
-            if ((Board[a]->get_color()!=K.get_color() && !b) ||( b && Board[a]->get_color()==K.get_color()))break;
-            if (!b) {
-                b=true; c=a;
-            }
-            else {
-                if (Board[a]->get_type()=='B' || Board[a]->get_type()=='Q') {
-                    Board[c]->pinned=true;
-                    Board[c]->pinning_piece_placement=a;
-                }
+    bool kingColor = K.get_color();
+
+    for (int i = 0; i < 16; i++) {
+        if (kingColor) {
+            if (WhitePieces[i] != nullptr) {
+                WhitePieces[i]->pinned = false;
+                WhitePieces[i]->pinning_piece_placement = -1;
             }
         }
-    }
-    b=false;
-    for (int i=1; i<=7; i++) {
-        if (K.get_y()+i>8) break;
-        int a = convert(K.get_x(), K.get_y()+i);
-        if (Board[a]!=nullptr){
-            if ((Board[a]->get_color()!=K.get_color() && !b) ||( b && Board[a]->get_color()==K.get_color()))break;
-            if (!b) {
-                b=true; c=a;
-            }
-            else {
-                if (Board[a]->get_type()=='R' || Board[a]->get_type()=='Q') {
-                    Board[c]->pinned=true;
-                    Board[c]->pinning_piece_placement=a;
-                }
-            }
-        }
-    }
-    b=false;
-    for (int i=1; i<=7; i++) {
-        if (K.get_y()+i>8 || K.get_x()+i>'h') break;
-        int a = convert(K.get_x()+i, K.get_y()+i);
-        if (Board[a]!=nullptr) {
-            if ((Board[a]->get_color()!=K.get_color() && !b) ||( b && Board[a]->get_color()==K.get_color()))break;
-            if (!b) {
-                b=true; c=a;
-            }
-            else {
-                if (Board[a]->get_type()=='B' || Board[a]->get_type()=='Q') {
-                    Board[c]->pinned=true;
-                    Board[c]->pinning_piece_placement=a;
-                }
+        else {
+            if (BlackPieces[i] != nullptr) {
+                BlackPieces[i]->pinned = false;
+                BlackPieces[i]->pinning_piece_placement = -1;
             }
         }
     }
 
-    b=false;
-    for (int i=1; i<=7; i++) {
-        if (K.get_x()-i<'a') break;
-        int a = convert(K.get_x()-i, K.get_y());
-        if (Board[a]!=nullptr){
-            if ((Board[a]->get_color()!=K.get_color() && !b) ||( b && Board[a]->get_color()==K.get_color()))break;
-            if (!b) {
-                b=true; c=a;
-            }
-            else {
-                if (Board[a]->get_type()=='R' || Board[a]->get_type()=='Q') {
-                    Board[c]->pinned=true;
-                    Board[c]->pinning_piece_placement=a;
-                }
-            }
-        }
-    }
-    b=false;
-    for (int i=1; i<=7; i++) {
-        if (K.get_x()+i>'h') break;
-        int a = convert(K.get_x()+i, K.get_y());
-        if (Board[a]!=nullptr){
-            if ((Board[a]->get_color()!=K.get_color() && !b) ||( b && Board[a]->get_color()==K.get_color()))break;
-            if (!b) {
-                b=true; c=a;
-            }
-            else {
-                if (Board[a]->get_type()=='R' || Board[a]->get_type()=='Q') {
-                    Board[c]->pinned=true;
-                    Board[c]->pinning_piece_placement=a;
-                }
-            }
-        }
-    }
-    b=false;
-    for (int i=1; i<=7; i++) {
-        if (K.get_y()-i<1 || K.get_x()-i<'a') break;
-        int a = convert(K.get_x()-i, K.get_y()-i);
-        if (Board[a]!=nullptr){
-            if ((Board[a]->get_color()!=K.get_color() && !b) ||( b && Board[a]->get_color()==K.get_color()))break;
-            if (!b) {
-                b=true; c=a;
-            }
-            else {
-                if (Board[a]->get_type()=='B' || Board[a]->get_type()=='Q') {
-                    Board[c]->pinned=true;
-                    Board[c]->pinning_piece_placement=a;
-                }
+    int kingSq = convert(K.get_x(), K.get_y());
+
+    for (int attackerSq = 0; attackerSq < 64; attackerSq++) {
+        if (Board[attackerSq] == nullptr) continue;
+
+        Piece* attacker = Board[attackerSq];
+
+
+        if (attacker->get_color() == kingColor) continue;
+
+        char type = std::toupper(attacker->get_type());
+
+
+        if (type != 'B' && type != 'R' && type != 'Q') continue;
+
+        int kf = kingSq % 8;
+        int kr = kingSq / 8;
+        int af = attackerSq % 8;
+        int ar = attackerSq / 8;
+
+        bool sameFile = (kf == af);
+        bool sameRank = (kr == ar);
+        bool sameDiagonal = (abs(kf - af) == abs(kr - ar));
+
+
+        if (type == 'B' && !sameDiagonal) continue;
+        if (type == 'R' && !(sameFile || sameRank)) continue;
+        if (type == 'Q' && !(sameFile || sameRank || sameDiagonal)) continue;
+
+        Piece* pinnedCandidate = nullptr;
+        int pinnedSq = -1;
+        int piecesBetween = 0;
+
+
+        for (int sq = 0; sq < 64; sq++) {
+            if (!is_between(kingSq, attackerSq, sq)) continue;
+            if (Board[sq] == nullptr) continue;
+
+            piecesBetween++;
+
+
+            if (Board[sq]->get_color() == kingColor) {
+                pinnedCandidate = Board[sq];
+                pinnedSq = sq;
             }
         }
-    }
-    b=false;
-    for (int i=1; i<=7; i++) {
-        if (K.get_y()-i<1) break;
-        int a = convert(K.get_x(), K.get_y()-i);
-        if (Board[a]!=nullptr){
-            if ((Board[a]->get_color()!=K.get_color() && !b) ||( b && Board[a]->get_color()==K.get_color()))break;
-            if (!b) {
-                b=true; c=a;
-            }
-            else {
-                if (Board[a]->get_type()=='R' || Board[a]->get_type()=='Q') {
-                    Board[c]->pinned=true;
-                    Board[c]->pinning_piece_placement=a;
-                }
-            }
-        }
-    }
-    b=false;
-    for (int i=1; i<=7; i++) {
-        if (K.get_y()-i<1 || K.get_x()+i>'h') break;
-        int a = convert(K.get_x()+i, K.get_y()-i);
-        if (Board[a]!=nullptr) {
-            if ((Board[a]->get_color()!=K.get_color() && !b) ||( b && Board[a]->get_color()==K.get_color()))break;
-            if (!b) {
-                b=true; c=a;
-            }
-            else {
-                if (Board[a]->get_type()=='B' || Board[a]->get_type()=='Q') {
-                    Board[c]->pinned=true;
-                    Board[c]->pinning_piece_placement=a;
-                }
-            }
+
+
+        if (piecesBetween == 1 && pinnedCandidate != nullptr) {
+            pinnedCandidate->pinned = true;
+            pinnedCandidate->pinning_piece_placement = attackerSq;
         }
     }
 }
@@ -744,7 +686,7 @@ void delete_piece(char x, int y) {
 
     for (int i=0; i<16; i++) {
         if (Pieces[i] == victim) {
-            Pieces[i] = nullptr;   // ❗ πρώτα null
+            Pieces[i] = nullptr;   //  πρώτα null
             delete victim;         // μετά delete
             break;
         }
@@ -769,7 +711,7 @@ void move(int turn, char m, char x, int y, bool c, char ambiguous_file, int ambi
             if (!pieces[i]) continue;
 
             // τύπος κομματιού (important fix)
-            if (m!='\0' && pieces[i]->get_type()!=m) continue;
+            if ( pieces[i]->get_type()!=m) continue;
 
             bool* lm = pieces[i]->get_legal_moves();
             if (!lm || !lm[target]) continue;
@@ -786,7 +728,7 @@ void move(int turn, char m, char x, int y, bool c, char ambiguous_file, int ambi
                 if (pieces[i]->get_y()!=ambiguous_rank) continue;
             }
 
-            int old_file = pieces[i]->get_x();
+            char old_file = pieces[i]->get_x();
             int old_rank = pieces[i]->get_y();
             // ================= EN PASSANT =================
             if (pieces[i]->get_type()=='\0') { // pawn
